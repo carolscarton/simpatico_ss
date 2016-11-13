@@ -6,8 +6,10 @@ Our implementation used the Stanford Dependency Parser available at NLTK.
 
 -----------------------------------------------------------------------
 **First Release**
+
 This release deals with the simplification of conjoint clauses.
 
 -----------------------------------------------------------------------
 **How to run**
+
 `python __main__.py examples`
