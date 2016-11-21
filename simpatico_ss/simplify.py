@@ -263,7 +263,7 @@ class Simplify():
             @param rel: parser relation between the main and the dependent clause (can be 'nsubj' or 'dobj')
             @return: a flag that indicates whether or not the sentence was simplified and the result sentence (if flag = False, ant is returned)
             """
-            subj = deps_root[el][0]
+            subj = deps_root[rel][0]
             deps_subj = dict(aux.get_by_address(subj)[u'deps'])
             if 'acl:relcl' in deps_subj.keys():
                 relc = deps_subj['acl:relcl'][0]
