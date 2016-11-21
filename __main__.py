@@ -1,3 +1,8 @@
+import sys  
+
+reload(sys)  
+sys.setdefaultencoding('utf8')
+
 from simpatico_ss.simplify import Simplify
 import sys
 
