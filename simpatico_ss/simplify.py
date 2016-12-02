@@ -1,8 +1,11 @@
-import en
 from analysis import Analysis
+from generation import Generation
 from nltk.tokenize import StanfordTokenizer
 from util import Parser
 import string
+from nltk.parse import DependencyGraph
+import operator
+import time
 
 class Simplify():
 
@@ -13,7 +16,7 @@ class Simplify():
         """
         self.sentences = open(doc, "r").read().strip().split("\n")
         
-        #markers are separated by their most used sense
+        ## markers are separated by their most used sense
         self.time = ['when', 'after', 'since', 'before', 'once']
         self.concession = ['although', 'though', 'but', 'however', 'whereas']
         self.justify = ['because', 'so', 'while']
@@ -21,10 +24,17 @@ class Simplify():
         self.condition2 = ['or']
         self.addition = ['and']
         
-        #list of all markers for analysis purposes
+        ## list of all markers for analysis purposes
         self.cc = self.time + self.concession + self.justify + self.condition + self.addition + self.condition2
 
+        ## list of relative pronouns
         self.relpron = ['whom', 'whose', 'which', 'who']
+
+        ## initiates parser server
+        self.parser = Parser()
+        
+        ## Generation class instance
+        self.generation = Generation(self.time, self.concession, self.justify, self.condition, self.condition2, self.addition, self.cc, self.relpron)
         
 
         
@@ -35,8 +45,21 @@ class Simplify():
         @param sent: sentence to be simplified.
         @param ant: previous sentence. If sent = ant, then no simplification should be performed.
         @param justify: controls cases where sentence order is inverted and should invert the entire recursion.
+        @return: the simplified sentences.
         """
-        
+
+        def remove_all(aux, item):
+            """
+            Remove all incidences of a node in a graph (needed for graphs with cycles).
+            @param aux: auxiliary of parse structure
+            @param item: node to be removed
+            """
+            for a in aux.keys():
+                for d in aux[a].keys():
+                    if item in aux[a][d]:
+                        aux[a][d].remove(item)
+
+
 
         def recover_punct(final, s):
             """
@@ -64,217 +87,55 @@ class Simplify():
             return final
 
 
-        def build(root, dep, aux, final, yes_root=True):
+        def build(root, dep, aux, words, final, yes_root=True, previous=None):
             """
             Creates a dictionary with the words of a simplified clause, following the sentence order.
             This is a recursive method that navigates through the dependency tree.
             @param root: the root node in the dependency tree
             @param dep: the dependencies of the root node
             @param aux: the auxiliary parser output
+            @param words: auxiliary parsed words
             @param final: dictionary with the positions and words
+            @param yes_root: flag to define whether or not the root node should be included
+            @param previous: list of nodes visited
             """
-            if yes_root:
-                final[root]=aux.get_by_address(root)[u'word']
+
+            ## controls recursion    
+            if previous == None:
+                previous = []
+            
+            if root in previous:
+                return
+            
+            previous.append(root)
+
+            ## for cases where the rule does not include the root node
+            if yes_root: 
+                final[root] = words[root-1][0]
+                previous.append(root)
+
             for k in dep.keys():
                 for i in dep[k]:
-                    deps = dict(aux.get_by_address(i)[u'deps'])
-                    build(i, deps, aux, final)
-                    final[i]=aux.get_by_address(i)[u'word']
+                    if i in aux.keys():
 
-        def print_sentence_voice(final_subj, final_obj, verb, v_aux,  v_tense, subj_tag, subj_word, final_mod2=None, final_root=None):
-            new_verb = ''
-            s_sentence1 = s_sentence2 = ''
-            if v_tense in ('VBD'):
-                new_verb = en.verb.past(verb) + " "
-            elif v_tense == 'MD' :
-                new_verb = v_aux.lower() + " " + en.verb.infinitive(verb) + " "      
-            elif v_tense in ('VBZ', 'VBP'):
-                if subj_tag in ("NNS", "NNPS"):
-                    new_verb = en.verb.present(verb, person=2) + " "
-                elif subj_tag in ("NN", "NNP"):
-                    new_verb = en.verb.present(verb, person=3) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("i", "me") and len(final_subj) == 1:
-                    new_verb = en.verb.present(verb, person = 1) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("he", "she", "it", "her", "him") and len(final_subj) == 1:
-                    new_verb = en.verb.present(verb, person = 3) + " "
-                else:
-                    new_verb = en.verb.present(verb, person = 2) + " "
-            elif v_tense in ('VBG'):
-                if subj_tag in ("NNS", "NNPS"):
-                    new_verb = en.verb.present(v_aux.lower(), person = 2, negate = False) + " " + en.verb.present_participle(verb) + " "
-                elif subj_tag in ("NN", "NNP"):
-                    new_verb = en.verb.present(v_aux.lower(), person = 3, negate = False) + " " + en.verb.present_participle(verb) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("i", "me") and len(final_subj) == 1:
-                    new_verb = en.verb.present(v_aux.lower(), person = 1, negate = False) + " " + en.verb.present_participle(verb) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("he", "she", "it", "her", "him") and len(final_subj) == 1:
-                    new_verb = en.verb.present(v_aux.lower(), person = 3, negate = False) + " " + en.verb.present_participle(verb) + " "
-                else:
-                    new_verb = en.verb.present(v_aux.lower(), person = 2, negate = False) + " " + en.verb.present_participle(verb) + " "
+                        deps = aux[i]
+                        
+                        ## needed for breaking loops -- solved by the recursion condition
+                        #for d in deps.keys():
+                        #    if i in deps[d]:
+                        #        deps[d].remove(i)
+                        
+                        build(i, deps, aux, words, final,previous=previous)
 
-            elif v_tense in ('VBN'):
-                if subj_tag in ("NNS", "NNPS"):
-                    new_verb = en.verb.present(v_aux.lower(), person = 2, negate = False) + " " + en.verb.past_participle(verb) + " "
-                elif subj_tag in ("NN", "NNP"):
-                    new_verb = en.verb.present(v_aux.lower(), person = 3, negate = False) + " " + en.verb.past_participle(verb) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("i", "me") and len(final_subj) == 1:
-                    new_verb = en.verb.present(v_aux.lower(), person = 1, negate = False) + " " + en.verb.past_participle(verb) + " "
-                elif subj_tag in ("PRP") and subj_word.lower() in ("he", "she", "it", "her", "him") and len(final_subj) == 1:
-                    new_verb = en.verb.present(v_aux.lower(), person = 3, negate = False) + " " + en.verb.past_participle(verb) + " "
-                else:
-                    new_verb = en.verb.present(v_aux.lower(), person = 2, negate = False) + " " + en.verb.past_participle(verb) + " "
-            
-            if subj_tag in ("PRP") and subj_word.lower() == "me" and len(final_subj) == 1:
-                for k in final_subj.keys():
-                    final_subj[k] = "I"
-            elif subj_tag in ("PRP") and subj_word.lower() == "her" and len(final_subj) == 1:
-                for k in final_subj.keys():
-                    final_subj[k] = "she"
-            elif subj_tag in ("PRP") and subj_word.lower() == "him" and len(final_subj) == 1:
-                for k in final_subj.keys():
-                    final_subj[k] = "he"
-            elif subj_tag in ("PRP") and subj_word.lower() == "them" and len(final_subj) == 1:
-                for k in final_subj.keys():
-                    final_subj[k] = "them"
-            elif subj_tag in ("PRP") and subj_word.lower() == "us" and len(final_subj) == 1:
-                for k in final_subj.keys():
-                    final_subj[k] = "we"
+                    final[i] = words[i-1][0]
 
 
-            #print v_tense
-            #print subj_tag
 
-            for k in sorted(final_subj.keys()):
-                s_sentence1 += final_subj[k] + " "
-
-            for k in sorted(final_obj.keys()):
-                s_sentence2 += final_obj[k] + " "
-
-            if final_mod2 != None:
-                for k in sorted(final_mod2.keys()):
-                    s_sentence2 += final_mod2[k] + " "
-            if final_root != None:
-                for k in sorted(final_root.keys()):
-                    s_sentence2 += final_root[k] + " "
-
-            return s_sentence1 + new_verb + s_sentence2 + ". "
-
-        def print_sentence_appos(final_root, final_appos, final_subj, v_tense, n_num, subj_word):
-            """
-            Finalise the simplification process for appostive cluases.
-            TODO: this should be removed from here and moved to generation phase
-            TODO: punctuation recovery
-            
-            """
-            s_sentence = ''
-            s_sentence2 = ''
-            for k in sorted(final_root.keys()):
-                s_sentence += final_root[k] + " "
-            s_sentence += "."
-
-            for k in sorted(final_subj.keys()):
-                s_sentence2 += final_subj[k] + " "
-
-
-            if n_num in ("NN", "NNP"):
-                if v_tense in ("VBP", "VBZ", "VB"):
-                    s_sentence2 += "is "
-                elif v_tense in ("VBD", "VBG", "VBN"):
-                    s_sentence2 += "was "
-
-            elif n_num in ("NNS", "NNPS"):
-                if v_tense in ("VBP", "VBZ", "VB"):
-                    s_sentence2 += "are "
-                elif v_tense in ("VBD", "VBG", "VBN"):
-                    s_sentence2 += "were "
-
-            elif n_num in ("PRP") and subj_word.lower() == "they":
-
-                if v_tense in ("VBP", "VBZ", "VB"):
-                    s_sentence2 += "are "
-                elif v_tense in ("VBD", "VBG", "VBN"):
-                    s_sentence2 += "were "
-
-            elif n_num in ("PRP"):
-                if v_tense in ("VBP", "VBZ", "VB"):
-                    s_sentence2 += "is "
-                elif v_tense in ("VBD", "VBG", "VBN"):
-                    s_sentence2 += "was "
-
-            for k in sorted(final_appos.keys()):
-                s_sentence2 += final_appos[k] + " "
-            s_sentence2 += "."
-            return s_sentence, s_sentence2
-            
-
-
-        def print_sentence(final1, final2, root_tag=None, mark=None, mark_pos=None, modal=None):
-            """
-            Finalise the simplification process by including markers and punctuation.
-            TODO: this should be removed from here and moved to generation phase.
-            TODO: punctuation recovery.
-            @param final1: dictionary of first clause 
-            @param final2: dictionary of second clause
-            @param root_tag: POS tag of the root node
-            @mark marker that triggered the simplification
-            @return: two sentences, one for each clause.
-            """ 
-            s_sentence = ''
-            s_sentence2 = ''
-            
-            ## control the markers that should be added into the simplified sentences
-            if mark in self.addition:
-                s_sentence2 += 'And '
-            if mark in self.condition:
-                s_sentence += 'Suppose '
-                if final2[sorted(final2.keys())[0]].lower() != 'then':
-                    s_sentence2 += 'Then '
-            elif mark in self.concession:
-                s_sentence2 += 'But '
-            elif mark in self.time:
-                if mark_pos > 1:
-                    if root_tag == 'VBP' or root_tag == 'VBZ' or root_tag == 'VB':
-                        s_sentence2 += 'This is ' + mark + " "
-                    else:
-                        s_sentence2 += 'This was ' + mark + " "
-                else:
-
-                    if root_tag == 'VBP' or root_tag == 'VBZ':
-                        s_sentence2 += 'This happens ' + mark + " "
-                    elif root_tag == 'VB' and modal != None: 
-                        s_sentence2 += 'This ' + modal + ' happen ' + mark + " "
-                    else:
-                        s_sentence2 += 'This happened ' + mark + " "
-
-            elif mark in self.justify:
-                s_sentence2 += 'So '
-            elif mark in self.condition2:
-                s_sentence2 += 'Alternatively '
-
-            ## build first sentence
-            for k in sorted(final1.keys()):
-                s_sentence += final1[k] + " "
-            s_sentence += ". "
-
-
-            ## build second sentence
-            for k in sorted(final2.keys()):
-                s_sentence2 += final2[k] + " "
-            s_sentence2 += ". "
-            
-            s_sentence = s_sentence.replace("either ", "")
-            s_sentence2 = s_sentence2.replace("either ", "")
-            s_sentence = s_sentence.replace("Either ", "")
-            s_sentence2 = s_sentence2.replace("Either ", "")
-
-
-            s_sentence = s_sentence[0].capitalize() + s_sentence[1:]
-            s_sentence2 = s_sentence2[0].capitalize() + s_sentence2[1:]
-            return s_sentence, s_sentence2
-
-        def conjoint_clauses(aux, root, deps_root, ant, _type, rel):
+        def conjoint_clauses(aux, words, root, deps_root, ant, _type, rel):
             """
             Simplify conjoint clauses
             @param aux: auxiliary parser output
+            @param words: auxiliary words and POS tags structure
             @param root: root node in the dependency tree
             @param deps_root: dependencies of the root node
             @param ant: previous sentence (for recursion purposes)
@@ -282,118 +143,136 @@ class Simplify():
             @param rel: parser relation between the main and the dependent clause (can be 'advcl' or 'conj')
             @return: a flag that indicates whether or not the sentence was simplified and the result sentence (if flag = False, ant is returned)
             """
+            
             ## split the clauses
-            others = dict(aux.get_by_address(root)[u'deps'])[rel]
+            others = deps_root[rel]
             pos = 0
-            flag = True
             s1 = s2 = ""
             v_tense = ""
             for o in others:
-                deps_other = dict(aux.get_by_address(o)[u'deps'])
+                flag = True
+                if o not in aux:
+                    flag = False
+                    continue
+                deps_other = aux[o]
+
                 ## check the marker position ('when' is advmod, while others are mark)
-                if rel == u'advcl':
-                    if u'mark' in deps_other.keys():
-                        mark = deps_other[u'mark'][0]
-                        mark_name = aux.get_by_address(mark)[u'word'].lower()
-                    elif u'advmod' in deps_other.keys():
-                        mark = deps_other[u'advmod'][0]
-                        mark_name = aux.get_by_address(mark)[u'word'].lower()
+                if 'advcl' in rel:
+                    if 'mark' in deps_other.keys():
+                        mark = deps_other['mark'][0]
+                        mark_name = words[mark-1][0].lower()
+                    elif 'advmod' in deps_other.keys():
+                        mark = deps_other['advmod'][0]
+                        mark_name = words[mark-1][0].lower()
                     else:
-                        return False, ant #needed for broken cases
+                        flag = False #needed for broken cases
+                        continue
                 else:
-                    if u'cc' in deps_root.keys() and u'conj' in deps_root.keys():
-                        conj = deps_root[u'conj'][0]
-                        if 'VB' in aux.get_by_address(conj)[u'tag'] and 'VB'in aux.get_by_address(root)[u'tag']: #needed for broken cases like 'Care and support you won't have to pay towards'
-                            mark = deps_root[u'cc'][0]
-                            mark_name = aux.get_by_address(mark)[u'word'].lower()
+                    if 'cc' in deps_root.keys() and 'conj' in rel:
+                        conj = deps_root[rel][0]
+                        if 'VB' in words[conj-1][1]['PartOfSpeech'] and 'VB'in words[root-1][1]['PartOfSpeech']: #needed for broken cases like 'Care and support you won't have to pay towards'
+                            mark = deps_root['cc'][0]
+                            mark_name = words[mark-1][0].lower()
                         else:
-                            return False, ant
+                            flag = False
+                            continue
                     else:
-                        return False, ant
+                        flag = False
+                        continue
                 
+                ## hack for simpatico use cases
+                if mark_name == "and" and words[mark-2][0].lower() == "care" and words[mark][0].lower() == "support":
+                    flag = False
+                    continue
+
                 ## dealing with cases without subject 
-                if u'nsubj' not in deps_other and u'nsubj' in deps_root:
-                    deps_other[u'nsubj'] = deps_root[u'nsubj']
-                elif u'nsubj' not in deps_other and u'nsubjpass' in deps_root:
-                    deps_other[u'nsubj'] = deps_root[u'nsubjpass']
-                elif u'nsubj' not in deps_other and u'nsubj' not in deps_root:
-                    return False, ant
+                if 'nsubj' not in deps_other and 'nsubj' in deps_root:
+                    deps_other['nsubj'] = deps_root['nsubj']
+                elif 'nsubj' not in deps_other and 'nsubjpass' in deps_root:
+                    deps_other['nsubj'] = deps_root['nsubjpass']
+                elif 'nsubj' not in deps_other and 'nsubj' not in deps_root:
+                    flag = False
+                    continue
                 
                 ## check if the marker is in the list of selected markers
                 if mark_name in _type:
+                    
+                    ## check if verbs have objects
+                    tag_list = ('advcl', 'xcomp', 'acomp', 'amod', 'appos', 'cc', 'ccomp', 'dep', 'dobj', 'iobj', 'nwe', 'pcomp', 'pobj', 'prepc', 'rcmod', 'ucomp', 'nmod', 'auxpass', 'advmod', 'prep')
 
-                    ## delete marker and relation from the graph
-                    if rel == u'advcl':
-                        if u'mark' in deps_other.keys():
-                             del deps_other[u'mark']
-                        elif u'advmod' in deps_other.keys():
-                            del deps_other[u'advmod']
-                    else:
-                        del deps_root[u'cc']
-                                
-                    del deps_root[rel][pos]
-                    pos+=1
-
-                    tag_list = (u'acomp', u'amod', u'appos', u'cc', u'ccomp', u'dep', u'dobj', u'iobj', u'nwe', u'pcomp', u'pobj', u'prepc', u'rcmod', u'ucomp', u'nmod', u'auxpass')
-
-                    if not any([t in tag_list  for t in deps_root.keys()]):
-                        return False, ant
-                    elif not any([t in tag_list  for t in deps_other.keys()]):
-                        return False, ant
-
+                    #if not any([t in tag_list  for t in deps_root.keys()]):
+                        #return False, ant
+                    #    flag = False
+                    #    continue
+                    #elif not any([t in tag_list  for t in deps_other.keys()]):
+                        #return False, ant
+                    #    flag = False
+                    #    continue
                     #if (len(deps_root) < 2 or len(deps_other) < 2):
                     #   return False, ant
                     
+                    ## delete marker and relation from the graph
+                    if 'advcl' in rel:
+                        if 'mark' in deps_other.keys():
+                             del deps_other['mark'][0]
+                        elif 'advmod' in deps_other.keys():
+                            del deps_other['advmod'][0]
+                    else:
+                        del deps_root['cc'][0]
+                                
+                    #del deps_root[rel][pos]
+                    #pos+=1
+                    deps_root[rel].remove(o)
+
+
                     ## for cases with time markers -- This + modal + happen
                     modal = None
-                    if u'aux' in deps_root and mark_name in self.time:
-                        modal = aux.get_by_address(deps_root[u'aux'][0])[u'word']
+                    if 'aux' in deps_root and mark_name in self.time:
+                        modal_pos = deps_root['aux'][0]
+                        modal = words[modal_pos-1][0]
 
                     ## for cases either..or with the modal verb attached to the main clause
-                    if u'aux' in deps_root and mark_name in self.condition2:
-                        deps_other[u'aux'] = deps_root[u'aux']
+                    if 'aux' in deps_root and mark_name in self.condition2:
+                        deps_other['aux'] = deps_root[u'aux']
                    
-                    
                     ## built the sentence again
                     final_root = {}
-                    build(root, deps_root, aux, final_root)
+                    build(root, deps_root, aux, words,  final_root)
                     final_deps = {}
-                    build(o, deps_other, aux, final_deps)
+                    build(o, deps_other, aux, words, final_deps)
 
-                    ## recover punctuation
-                    final_root = recover_punct(final_root, s)
-                    final_deps = recover_punct(final_deps, s)
-
-                    ## check if verbs have objects
-                    #if len(final_root.keys()) < 2 or len(final_deps.keys()) < 2 and mark_name.lower() == 'and':
-                    #    return False, ant
                     
-                    ## TODO: remove this part from here --> move to another module: generation
-                    root_tag =  aux.get_by_address(root)[u'tag']
+                    ## TODO: remove this part from here --> move to another module: self.generation
+                    root_tag =  words[root-1][1]['PartOfSpeech']
                     justify = True
                     #if ((root > o) and (mark_name in self.time and mark>1)) or (mark_name == 'because' and mark > 1):
                     if (root > o) or (mark_name == 'because' and mark > 1):
                         if (mark_name in self.time and mark == 1):
-                            sentence1, sentence2 = print_sentence(final_root, final_deps, root_tag, mark_name, mark, modal)
+                            sentence1, sentence2 = self.generation.print_sentence(final_root, final_deps, root_tag, mark_name, mark, modal)
                         else:
-                            sentence1, sentence2 = print_sentence(final_deps, final_root, root_tag, mark_name, mark, modal)
+                            sentence1, sentence2 = self.generation.print_sentence(final_deps, final_root, root_tag, mark_name, mark, modal)
                     else:
-                        sentence1, sentence2 = print_sentence(final_root, final_deps, root_tag, mark_name, mark, modal)
+                        sentence1, sentence2 = self.generation.print_sentence(final_root, final_deps, root_tag, mark_name, mark, modal)
                         
-
-                    
                     s1 = self.transformation(sentence1, ant, justify)
                     s2 = self.transformation(sentence2, ant)
 
-                    return True, s1 + " " +  s2
+                    flag = True 
                 else:
-                    return False, ant
+                    flag = False
+                    continue
+            
+            if flag:
+                return flag,  s1 + " " +  s2
+            else:
+                return flag, ant
 
 
-        def relative_clauses(aux, root, deps_root, ant, rel):
+        def relative_clauses(aux, words, root, deps_root, ant, rel):
             """
             Simplify relative clauses
             @param aux: auxiliary parser output
+            @param words: auxiliary words and POS tags structure
             @param root: root node in the dependency tree
             @param deps_root: dependencies of the root node
             @param ant: previous sentence (for recursion purposes)
@@ -401,41 +280,62 @@ class Simplify():
             @return: a flag that indicates whether or not the sentence was simplified and the result sentence (if flag = False, ant is returned)
             """
             subj = deps_root[rel][0]
-            deps_subj = dict(aux.get_by_address(subj)[u'deps'])
-            if 'acl:relcl' in deps_subj.keys():
-                relc = deps_subj['acl:relcl'][0]
-                deps_relc = dict(aux.get_by_address(relc)[u'deps'])
+            if subj not in aux.keys():
+                return False, ant
+            deps_subj = aux[subj]
+            if 'acl:relcl' in deps_subj.keys() or 'rcmod' in deps_subj.keys():
+                if 'acl:relcl' in deps_subj.keys():
+                    relc = deps_subj['acl:relcl'][0]
+                    type_rc = 'acl:relcl'
+                else:
+                    relc = deps_subj['rcmod'][0]
+                    type_rc = 'rcmod'
+                deps_relc = aux[relc]
 
-                if u'nsubj' in deps_relc.keys():
-                    subj_rel = u'nsubj'
-                elif u'nsubjpass' in deps_relc.keys():
-                    subj_rel = u'nsubjpass'
+                if 'nsubj' in deps_relc.keys():
+                    subj_rel = 'nsubj'
+                elif 'nsubjpass' in deps_relc.keys():
+                    subj_rel = 'nsubjpass'
 
-                if aux.get_by_address(deps_relc[subj_rel][0])[u'word'].lower() in self.relpron:
+                if 'ref' in deps_subj:
+                    to_remove = deps_subj['ref'][0] 
+                    mark = words[deps_subj['ref'][0]-1][0].lower()
+                else:
+                    to_remove = deps_relc[subj_rel][0]
+                    mark = words[deps_relc[subj_rel][0]-1][0].lower()
+
+                if mark in self.relpron:
                     deps_relc[subj_rel][0] = subj
-                elif u'dobj' in deps_relc: ## needed for cases where the subject of the relative clause is the object
-                    obj = deps_relc[u'dobj'][0]
-                    mod = aux.get_by_address(obj)[u'deps'][u'nmod:poss'][0]
-                    aux.get_by_address(mod)[u'word'] = aux.get_by_address(subj)[u'word'] + '\'s'
-                    aux.get_by_address(mod)[u'deps'] = aux.get_by_address(subj)[u'deps']
+                    remove_all(aux, to_remove)
+                elif 'dobj' in deps_relc: ## needed for cases where the subject of the relative clause is the object
+                    obj = deps_relc['dobj'][0]
+                    if 'poss' in aux[obj]:
+                        mod = aux[obj]['poss'][0]
+                        aux_words = list(words[mod-1])
+                        aux_words[0] = words[subj-1][0] + '\'s'
+                        words[mod-1] = tuple(aux_words)
+                        aux[mod] = aux[subj]
+                    else:
+                        return False, ant
                 else:
                     return False, ant #for borken cases - " There are some situations where it is particularly important that you get financial information and advice that is independent of us."
 
-                del aux.get_by_address(subj)[u'deps'][u'acl:relcl']
+                del aux[subj][type_rc]
+
+                if 'punct' in deps_subj.keys():
+                    del aux[subj]['punct']
 
                 
                 final_root= {}
-                build(root, deps_root, aux, final_root)
+                build(root, deps_root, aux, words, final_root)
                 final_relc = {}
-                build(relc, deps_relc, aux, final_relc)
+                build(relc, deps_relc, aux, words, final_relc)
 
-                final_root = recover_punct(final_root, s)
-                final_relc = recover_punct(final_relc, s)
 
                 if justify:
-                    sentence2, sentence1 = print_sentence(final_root, final_relc)
+                    sentence2, sentence1 = self.generation.print_sentence(final_root, final_relc)
                 else:
-                    sentence1, sentence2 = print_sentence(final_root, final_relc)
+                    sentence1, sentence2 = self.generation.print_sentence(final_root, final_relc)
 
                 s1 = self.transformation(sentence1, ant, justify)
                 s2 = self.transformation(sentence2, ant)
@@ -444,232 +344,210 @@ class Simplify():
                 return False, ant
 
 
-        def appositive_phrases(sent, ant):
+        def appositive_phrases(aux, words, root, deps_root, ant):
             """
             Simplify appositive phrases
             @param aux: auxiliary parser output
+            @param words: auxiliary words and POS tags structure
             @param root: root node in the dependency tree
             @param deps_root: dependencies of the root node
             @param ant: previous sentence (for recursion purposes)
             @return: a flag that indicates whether or not the sentence was simplified and the result sentence (if flag = False, ant is returned)
             """
 
-            ## parser
-            try:
-                parser = Parser(sent)
-                parsed = parser.process()
+            ## apposition needs to have a subject -- same subject of the mais sentence.
+            if 'nsubj' in deps_root.keys():
 
-            except AssertionError:
+                subj = deps_root['nsubj'][0]
+                subj_word = words[subj-1][0]
+
+                if subj not in aux:
+                    return False, ant
+
+                deps_subj = aux[subj]
+                v_tense = words[root-1][1]['PartOfSpeech']
+                n_num = words[subj-1][1]['PartOfSpeech']
+                if 'amod' in deps_subj: ## bug -- this generates several mistakes... 
+                    mod = deps_subj['amod'][0]
+                    if mod in aux:
+                        deps_mod = aux[mod]
+                    else:
+                        deps_mod = {}
+                    del aux[subj]['amod']
+                    deps_subj = aux[subj]
+                        
+                    ## Treat simple cases such as 'general rule'
+                    #if 'JJ' in words[mod-1][1]['PartOfSpeech'] and len(deps_mod.keys()) == 0: 
+                    if 'JJ' in words[mod-1][1]['PartOfSpeech'] and 'punct' not in deps_subj:
+                        return False, ant
+
+                elif 'appos' in deps_subj:
+                    mod = deps_subj['appos'][0]
+                    if mod in aux:
+                        deps_mod = aux[mod]
+                    else:
+                        deps_mod = {}
+                    del aux[subj]['appos']
+                    deps_subj = aux[subj]
+                else:
+                    return False, ant
+
+                if 'punct' in deps_subj.keys():
+                    del deps_subj['punct']
+
+                final_root = {}
+                build(root, deps_root, aux, words, final_root)
+                final_appos = {}
+                build(mod, deps_mod, aux, words, final_appos)
+                final_subj = {}
+                build(subj, deps_subj, aux, words, final_subj)
+
+                if len(final_appos.keys()) < 2:
+                    return False, ant
+
+                sentence1, sentence2 = self.generation.print_sentence_appos(final_root, final_appos, final_subj, v_tense, n_num, subj_word)
+                s1 = self.transformation(sentence1, ant)
+                s2 = self.transformation(sentence2, ant)
+                return True, s1 + " " + s2
+            else:
                 return False, ant
 
-            for aux in parsed:
-                
-                ## root
-                root = dict(aux.get_by_address(0)[u'deps'])['root'][0]
+        def passive_voice(aux, words, root, deps_root, ant):
+            """
+            Simplify sentence from passive to active voice.
+            @param aux: auxiliary parser output
+            @param words: auxiliary words and POS tags structure
+            @param root: root node in the dependency tree
+            @param deps_root: dependencies of the root node
+            @param ant: previous sentence (for recursion purposes)
+            @return: a flag that indicates whether or not the sentence was simplified and the result sentence (if flag = False, ant is returned)
+            """
 
-                ## root dependencies
-                deps_root = dict(aux.get_by_address(root)[u'deps'])
+            if 'auxpass' in deps_root.keys():
+                    
+                if 'nmod:agent' in deps_root.keys():
 
-
-                ## apposition needs to have a subject -- same subject of the mais sentence.
-                if u'nsubj' in deps_root:
-
-                    subj = deps_root[u'nsubj'][0]
-                    subj_word = aux.get_by_address(subj)[u'word']
-                    deps_subj = dict(aux.get_by_address(subj)[u'deps'])
-                    v_tense = aux.get_by_address(root)[u'tag']
-                    n_num = aux.get_by_address(subj)[u'tag']
-                    if u'amod' in deps_subj: ## bug -- this generates several mistakes... 
-                        mod = deps_subj[u'amod'][0]
-                        deps_mod = dict(aux.get_by_address(mod)[u'deps'])
-                        del aux.get_by_address(subj)[u'deps'][u'amod']
-                        deps_subj = dict(aux.get_by_address(subj)[u'deps'])
+                    subj = deps_root['nsubjpass'][0]
+                    if subj in aux:
+                        deps_subj = aux[subj]
+                    else:
+                        deps_subj = {}
                         
-                        ## Treat simple cases such as 'general rule'
-                        if 'JJ' in aux.get_by_address(mod)[u'tag'] and len(deps_mod.keys()) == 0: 
+                    aux_tense = words[deps_root['auxpass'][0]-1][1]['PartOfSpeech']
+                    v_aux = None
+
+                    if aux_tense == 'VB' and 'aux' in deps_root.keys():
+                        aux_tense = words[deps_root['aux'][0]-1][1]['PartOfSpeech']
+                        v_aux = words[deps_root['aux'][0]-1][0]
+                        del deps_root['aux']
+                    elif aux_tense == 'VBG' and 'aux' in deps_root.keys():
+                        #aux_tense = aux.get_by_address(deps_root[u'aux'][0])[u'tag']
+                        v_aux = words[deps_root['aux'][0]-1][0]
+                        del deps_root['aux']
+                    elif aux_tense == 'VBN' and 'aux' in deps_root.keys():
+                        #v_aux = words[deps_root['aux'][0]-1][1]['PartOfSpeech']
+                        v_aux = words[deps_root['aux'][0]-1][0]
+                        if v_aux.lower() in ("has", "have"):
+                            v_aux = words[deps_root['aux'][0]-1][0]
+                        else:
+                            aux_tense = 'MD'
+                        del deps_root['aux']
+                           
+                    del deps_root['auxpass']
+                    del deps_root['nsubjpass']
+
+                    if len(deps_root['nmod:agent']) > 1:
+                        mod = deps_root['nmod:agent'][1]
+                        mod2 = deps_root['nmod:agent'][0]
+                        deps_mod = aux[mod]
+                        deps_mod2 = aux[mod2]
+                        if 'case' in deps_mod:
+                            if words[deps_mod[u'case'][0]-1][0].lower() != 'by':
+                                return False, ant
+                            del deps_mod['case']
+                            del deps_root['nmod:agent']
+                            subj_tag = words[mod-1][1]['PartOfSpeech']
+                            subj_word = words[mod-1][0]  
+                            final_subj = {}
+                            build(mod, deps_mod, aux, words, final_subj)
+                                
+                            final_obj = {}
+                            build(subj, deps_subj, aux, words, final_obj)
+                                
+                            final_mod2 = {}
+                            build(mod2, deps_mod2, aux, words, final_mod2)
+
+                            final_root = {}
+                            build(root, deps_root, aux, words, final_root, False)
+                                
+                                
+                            sentence1 = self.generation.print_sentence_voice(final_subj, final_obj, words[root-1][0], v_aux, aux_tense, subj_tag, subj_word, final_mod2, final_root)
+                            s1 = self.transformation(sentence1, ant)
+                            return True, s1
+                        elif 'case' in deps_mod2:
+                            if words[deps_mod2['case'][0]-1][0].lower() != 'by':
+                                return False, ant
+                            del deps_mod2['case']
+                            del deps_root['nmod:agent']
+                            subj_tag = words[mod2-1][1]['PartOfSpeech']
+                            subj_word = words[mod2-1][0]
+                                
+                            final_subj = {}
+                            build(mod2, deps_mod2, aux, words, final_subj)
+                                
+                            final_obj = {}
+                            build(subj, deps_subj, aux, words, final_obj)
+                                
+                            final_mod2 = {}
+                            build(mod, deps_mod, aux, words, final_mod2)
+
+                            final_root = {}
+                            build(root, deps_root, aux, words, final_root, False)
+
+                            sentence1 = self.generation.print_sentence_voice(final_subj, final_obj, words[root-1][0], v_aux, aux_tense, subj_tag, subj_word, final_mod2, final_root)
+                            s1 = self.transformation(sentence1, ant)
+                            return True, s1
+                        else:
                             return False, ant
 
-                    elif u'appos' in deps_subj:
-                        mod = deps_subj[u'appos'][0]
-                        deps_mod = dict(aux.get_by_address(mod)[u'deps'])
-                        del aux.get_by_address(subj)[u'deps'][u'appos']
-                        deps_subj = dict(aux.get_by_address(subj)[u'deps'])
                     else:
-                        return False, ant
-
-                    final_root = {}
-                    build(root, deps_root, aux, final_root)
-                    final_appos = {}
-                    build(mod, deps_mod, aux, final_appos)
-                    final_subj = {}
-                    build(subj, deps_subj, aux, final_subj)
-
-                    if len(final_appos.keys()) < 2:
-                        return False, ant
-
-                    final_root = recover_punct(final_root, s)
-                    final_appos = recover_punct(final_appos, s)
-                    final_subj = recover_punct(final_subj, s)
-                    
-                    sentence1, sentence2 = print_sentence_appos(final_root, final_appos, final_subj, v_tense, n_num, subj_word)
-                    s1 = self.transformation(sentence1, ant)
-                    s2 = self.transformation(sentence2, ant)
-                    return True, s1 + " " + s2
-                else:
-                    return False, ant
-
-        def passive_voice(sent, ant):
-            try: 
-                parser = Parser(sent)
-                parsed = parser.process()
-            except AssertionError:
-                return False, ant
-
-            for aux in parsed:
-                root = dict(aux.get_by_address(0)[u'deps'])['root'][0]
-
-                #print root
-                deps_root = dict(aux.get_by_address(root)[u'deps'])
-
-                #print deps_root
-            
-                if u'auxpass' in deps_root.keys():
-                    
-                    if u'nmod' in deps_root:
-
-                        subj = deps_root[u'nsubjpass'][0]
-                        deps_subj = dict(aux.get_by_address(subj)[u'deps'])
-                        
-                        aux_tense = aux.get_by_address(deps_root[u'auxpass'][0])[u'tag']
-                        v_aux = None
-
-                        if aux_tense == 'VB' and u'aux' in deps_root.keys():
-                            aux_tense = aux.get_by_address(deps_root[u'aux'][0])[u'tag']
-                            v_aux = aux.get_by_address(deps_root[u'aux'][0])[u'word']
-                            del deps_root[u'aux']
-                        elif aux_tense == 'VBG' and u'aux' in deps_root.keys():
-                            #aux_tense = aux.get_by_address(deps_root[u'aux'][0])[u'tag']
-                            v_aux = aux.get_by_address(deps_root[u'aux'][0])[u'word']
-                            del deps_root[u'aux']
-                        elif aux_tense == 'VBN' and u'aux' in deps_root.keys():
-                            v_aux = aux.get_by_address(deps_root[u'aux'][0])[u'word']
-                            if v_aux.lower() in ("has", "have"):
-                                v_aux = aux.get_by_address(deps_root[u'aux'][0])[u'word']
-                            else:
-                                aux_tense = 'MD'
-                            del deps_root[u'aux']
-                           
-                        del deps_root[u'auxpass']
-                        del deps_root[u'nsubjpass']
-
-                        if len(deps_root[u'nmod']) > 1:
-                            mod = deps_root[u'nmod'][1]
-                            mod2 = deps_root[u'nmod'][0]
-                            deps_mod = dict(aux.get_by_address(mod)[u'deps'])
-                            deps_mod2 = dict(aux.get_by_address(mod2)[u'deps'])
-                            if u'case' in deps_mod:
-                                if aux.get_by_address(deps_mod[u'case'][0])[u'word'].lower() != 'by':
-                                    return False, ant
-                                del deps_mod[u'case']
-                                del deps_root[u'nmod']
-                                subj_tag = aux.get_by_address(mod)[u'tag']
-                                subj_word =aux.get_by_address(mod)[u'word']  
-                                final_subj = {}
-                                build(mod, deps_mod, aux, final_subj)
-                                
-                                final_obj = {}
-                                build(subj, deps_subj, aux, final_obj)
-                                
-                                final_mod2 = {}
-                                build(mod2, deps_mod2, aux, final_mod2)
-
-                                final_root = {}
-                                build(root, deps_root, aux, final_root, False)
-                                
-                                final_subj = recover_punct(final_subj, s)
-                                final_obj = recover_punct(final_obj, s)
-                                final_mod2 = recover_punct(final_mod2, s)
-                                
-                                sentence1 = print_sentence_voice(final_subj, final_obj, aux.get_by_address(root)[u'word'], v_aux, aux_tense, subj_tag, subj_word, final_mod2, final_root)
-                                s1 = self.transformation(sentence1, ant)
-                                return True, s1
-                            elif u'case' in deps_mod2:
-                                if aux.get_by_address(deps_mod2[u'case'][0])[u'word'].lower() != 'by':
-                                    return False, ant
-                                del deps_mod2[u'case']
-                                del deps_root[u'nmod']
-                                subj_tag = aux.get_by_address(mod2)[u'tag']
-                                subj_word = aux.get_by_address(mod)[u'word']
-                                
-                                final_subj = {}
-                                build(mod2, deps_mod2, aux, final_subj)
-                                
-                                final_obj = {}
-                                build(subj, deps_subj, aux, final_obj)
-                                
-                                final_mod2 = {}
-                                build(mod, deps_mod, aux, final_mod2)
-
-                                final_root = {}
-                                build(root, deps_root, aux, final_root, False)
-
-                                final_subj = recover_punct(final_subj, s)
-                                final_obj = recover_punct(final_obj, s)
-                                final_mod2 = recover_punct(final_mod2, s)
-                                final_root = recover_punct(final_root, s)
-                                sentence1 = print_sentence_voice(final_subj, final_obj, aux.get_by_address(root)[u'word'], v_aux, aux_tense, subj_tag, subj_word, final_mod2, final_root)
-                                s1 = self.transformation(sentence1, ant)
-                                return True, s1
-                            else:
-                                return False, ant
-
-                        else:
-                            mod = deps_root[u'nmod'][0]
+                        mod = deps_root['nmod:agent'][0]
     
-                            deps_mod =  dict(aux.get_by_address(mod)[u'deps'])
+                        deps_mod =  aux[mod]
 
-                            if u'case' in deps_mod:
-                                if aux.get_by_address(deps_mod[u'case'][0])[u'word'].lower() != 'by':
-                                    return False, ant
-                                #print deps_mod
-
-                                del deps_mod[u'case']
-                                del deps_root[u'nmod']
-
-                                subj_tag = aux.get_by_address(mod)[u'tag']
-                                subj_word = aux.get_by_address(mod)[u'word']
-                    
-                                final_subj = {}
-                                build(mod, deps_mod, aux, final_subj)
-
-                                final_obj = {}
-                                build(subj, deps_subj, aux, final_obj)
-                        
-                                final_root = {}
-                                build(root, deps_root, aux, final_root, False)
-
-                                final_subj = recover_punct(final_subj, s)
-                                final_obj = recover_punct(final_obj, s)
-                                final_root = recover_punct(final_root, s)
-
-                                #print final_subj
-                                #print final_obj
-
-
-                                sentence1 = print_sentence_voice(final_subj, final_obj, aux.get_by_address(root)[u'word'], v_aux, aux_tense, subj_tag, subj_word, final_root)
-                                #print simpl
-                                s1 = self.transformation(sentence1, ant)
-                                return True, s1
-                            else:
+                        if 'case' in deps_mod:
+                            if words[deps_mod['case'][0]-1][0].lower() != 'by':
                                 return False, ant
-                    else: 
-                        return False, ant
-                else:
+
+                            del deps_mod['case']
+                            del deps_root['nmod:agent']
+
+                            subj_tag = words[mod-1][1]['PartOfSpeech']
+                            subj_word = words[mod-1][0]
+                    
+                            final_subj = {}
+                            build(mod, deps_mod, aux, words, final_subj)
+
+                            final_obj = {}
+                            build(subj, deps_subj, aux, words, final_obj)
+                        
+                            final_root = {}
+                            build(root, deps_root, aux, words, final_root, False)
+
+                            sentence1 = self.generation.print_sentence_voice(final_subj, final_obj, words[root-1][0], v_aux, aux_tense, subj_tag, subj_word, final_root)
+                            s1 = self.transformation(sentence1, ant)
+                            return True, s1
+                        else:
+                            return False, ant
+                else: 
                     return False, ant
+            else:
+                return False, ant
 
                 
 
         ## MAIN OF TRANSFORMATION
+        
         ## control recursion: check whether there is no simplification to be done
         if sent == ant:
             return sent
@@ -678,64 +556,76 @@ class Simplify():
 
         ant = sent
 
-        ## tokenizer 
-        tokenizer = StanfordTokenizer()
-        sent_tok = tokenizer.tokenize(sent)
 
-        s = sent_tok
+        ## parser
+        try:
+            parsed = self.parser.process(sent)
+
+        except AssertionError:
+            return ant
+
+        ## data structure for the words and POS
+        words = parsed['words']
+
+        ## data structure for the dependency parser
+        dict_dep = self.parser.transform(parsed)
+
+        ## check whether or not the sentence has a root node
+        if 0 not in dict_dep:
+            return ant
+
+        root = dict_dep[0]['root'][0]
         
+        ## check for root dependencies
+        if root not in dict_dep:
+            return ant
+
+        deps_root = dict_dep[root]
+        
+        ## get tokens
+        sent_tok = []
+        for w in words:
+            sent_tok.append(w[0])
+
+
         ## dealing with questions
         ## TODO: improve this control with parser information.
-        if s[0].lower() in ("what", "where", "when", "whose", "who", "which", "whom", "whatever", "whatsoever", "whichever", "whoever", "whosoever", "whomever", "whomsoever", "whoseever", "whereever") and s[-1] == "?":
+        if sent_tok[0].lower() in ("what", "where", "when", "whose", "who", "which", "whom", "whatever", "whatsoever", "whichever", "whoever", "whosoever", "whomever", "whomsoever", "whoseever", "whereever") and sent_tok[-1] == "?":
             return ant
 
         ## deal with apposition
-        flag, simpl = appositive_phrases(sent, ant)
+        flag, simpl = appositive_phrases(dict_dep, words, root, deps_root, ant)
         if flag:
             return simpl
         
         
         ## analyse whether or not a sentence has simplification clues (in this case, discourse markers or relative pronouns)
-        a = Analysis(s, self.cc, self.relpron)
+        a = Analysis(sent_tok, self.cc, self.relpron)
 
         flag_cc, type_cc = a.analyse_cc()
 
         ## if sentence has a marker that requires attention
         if flag_cc:
+            ## sorting according to the order of the relations
+            rel = {}
+            for k in deps_root.keys():
+                if 'conj' in k or 'advcl' in k:
+                    others = sorted(deps_root[k], reverse=True)
+                    cnt = 0
+                    for o in others:
+                        deps_root[k+str(cnt)] = []
+                        deps_root[k+str(cnt)].append(o)
+                        rel[k+str(cnt)] = deps_root[k][0]
+                        cnt+=1
+                    del deps_root[k]
             
-            ## parser the parser needs to be called for each case, otherwise it breaks (iterator problems)
-            ## TODO: optmise the parser calls
-            try:
-                parser = Parser(sent)
-                parsed = parser.process()
+            sorted_rel = sorted(rel.items(), key=operator.itemgetter(1))
+            for k in sorted_rel:
 
-            except AssertionError:
-                return ant
-        
-            ## reads parsed sentence
-            for aux in parsed:
-                    
-                ## root
-                root = dict(aux.get_by_address(0)[u'deps'])['root'][0]
+                flag, simpl = conjoint_clauses(dict_dep, words, root, deps_root, ant, type_cc, k[0])
+                if flag:
+                    return simpl
 
-                    
-                ## root dependencies
-                deps_root = dict(aux.get_by_address(root)[u'deps'])
-
-
-                ## search for 'advcl' clause (for cases with 'although', 'though', ...)
-                if 'advcl' in deps_root.keys():
-                    flag, simpl = conjoint_clauses(aux, root, deps_root, ant, type_cc, u'advcl')
-                    if flag:
-                        return simpl
-                ## search for 'conj' clause (for cases with 'and' and 'but' in the middle of the sentence)
-                if 'conj' in deps_root.keys():
-                    flag, simpl = conjoint_clauses(aux, root, deps_root, ant, type_cc, u'conj')
-                    if flag:
-                        return simpl
-
-                else:
-                    flag = False #if there is no 'advcl', then do not simplify
 
                     
     
@@ -745,66 +635,46 @@ class Simplify():
         if flag_rc:
                 
     
-            ## parser
-            try:
-                parser = Parser(sent)
-                parsed = parser.process()
+            ## check where is the dependency of the relative clause
+            if 'nsubj' in deps_root:
+                flag, simpl = relative_clauses(dict_dep, words, root, deps_root, ant, 'nsubj')
+                if flag:
+                    return simpl
+            elif 'dobj' in deps_root:
+                flag, simpl = relative_clauses(dict_dep, words, root, deps_root, ant, 'dobj')
+                if flag:
+                    return simpl
 
-            except AssertionError:
-                return ant
-            
-            for aux in parsed:
-                
-                ## root
-                root = dict(aux.get_by_address(0)[u'deps'])['root'][0]
-
-                ## root dependencies
-                deps_root = dict(aux.get_by_address(root)[u'deps'])
-
-                ## check where is the dependency of the relative clause
-                if u'nsubj' in deps_root:
-                    flag, simpl = relative_clauses(aux, root, deps_root, ant, u'nsubj')
-                    if flag:
-                        return simpl
-                elif u'dobj' in deps_root:
-                    flag, simpl = relative_clauses(aux, root, deps_root, ant, u'dobj')
-                    if flag:
-                        return simpl
-
-                else:
-                    flag = False
 
         
 
 
         ## deal with passive voice
-        flag, simpl = passive_voice(sent, ant)
+        flag, simpl = passive_voice(dict_dep, words, root, deps_root, ant)
         if flag:
             return simpl
 
         
-        
+        ## return the original sentence if no simplification was done
         if flag== False:
             return ant
-        #else:
-        #    return simpl
 
     def simplify(self):        
         """
         Call the simplification process for all sentences in the document.
         """
-        c = 0
+        #c = 0
         simp_sentences = []
         for s in self.sentences:
 
-            print "Original: " + s
+            #print "Original: " + s
             
             simp_sentences.append(self.transformation(s, ''))
 
             ## for demonstration purposes only. remove the prints later
-            print "Simplified: ",
-            print simp_sentences[c]
-            c+=1
+            #print "Simplified: ",
+            #print simp_sentences[c]
+            #c+=1
 
-            print   
+            #print   
         return simp_sentences

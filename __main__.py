@@ -12,6 +12,9 @@ s = Simplify(doc)
 
 simp_doc = s.simplify()
 
+for simp in simp_doc:
+    print simp
+
 #print simp_doc
 
 #parser = Parser(doc)

@@ -24,7 +24,8 @@ class Analysis():
                 else:
                     c+=1
                     if s.lower() in self.cc and "this was " + s.lower() not in " ".join(self.sentence).lower() and "this is " + s.lower() not in " ".join(self.sentence).lower() and "this happens " + s.lower() not in " ".join(self.sentence).lower() and "this happened " + s.lower() not in " ".join(self.sentence).lower()  and "this would happen " + s.lower() not in " ".join(self.sentence).lower() and "this will happen " + s.lower() not in " ".join(self.sentence).lower() and "this should happen " + s.lower() not in " ".join(self.sentence).lower() and "this could happen " + s.lower() not in " ".join(self.sentence).lower() + "this must happen " + s.lower() not in " ".join(self.sentence).lower() and "this may happen " + s.lower() not in " ".join(self.sentence).lower() and "this can happen " + s.lower() not in " ".join(self.sentence).lower() and "this shall happen " + s.lower() not in " ".join(self.sentence).lower() and "this will happen " + s.lower() not in " ".join(self.sentence).lower() and "this 'll happen " + s.lower() not in " ".join(self.sentence).lower():
-                    #if s.lower() in self.cc and "this" not in " ".join(self.sentence).lower() and "happen" not in " ".join(self.sentence).lower():   
+                    #if s.lower() in self.cc and "this" not in " ".join(self.sentence).lower() and "happen" not in " ".join(self.sentence).lower():  
+                    
                         mark.append(s.lower())
             return True, mark
         else: 
