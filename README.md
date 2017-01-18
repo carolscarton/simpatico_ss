@@ -36,15 +36,7 @@ You need to download the pre-trained truecase model, dependency parser and POS t
 -----------------------------------------------------------------------
 ## How to run
 
-`usage: __main__.py [-h] [-l {en,gl}] [-d D]
-
-Rule-based syntactic simplifier for the SIMPATICO project.
-
-optional arguments:
-  -h, --help  show this help message and exit
-  -l {en,gl}  language
-  -d D        document to be simplified (with one sentence per line)
-`
+`python __main__.py [-l {en,gl}] [-d Document]`
 
 The path for the Stanford CoreNLP tool should be changed in simpatico_ss/util.py before use.
 The systems also expect a file called 'distributions.obj' in the truecaser folder for English or a file called 'distributions.gl.obj' for Galician. Please use the instructions in External Resources/Tool section.
