@@ -29,9 +29,9 @@ For the truecaser a model file .obj is required. Please download the English pre
 **Galician**
 You need to download the pre-trained truecase model, dependency parser and POS tagger for Galician:
 
-1. Truecase model (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/distributions.gl.obj) - please place this model into the truecase folder
-2. POS tagger (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.tagger)
-3. Dependency parser (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.nndep.model.txt.gz)
+1. Truecase model (https://www.dcs.shef.ac.uk/people/C.Scarton/resources/distributions.gl.obj) - please place this model into the truecase folder
+2. POS tagger (https://www.dcs.shef.ac.uk/people/C.Scarton/resources/galician.tagger)
+3. Dependency parser (https://www.dcs.shef.ac.uk/people/C.Scarton/resources/galician.nndep.model.txt.gz)
 
 -----------------------------------------------------------------------
 ## How to run
