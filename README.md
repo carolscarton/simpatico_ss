@@ -6,7 +6,7 @@ Our implementation uses the Stanford Dependency Parser available at CoreNLP (htt
 The Dependency parser is initialised as a server using the code available at https://github.com/Wordseer/stanford-corenlp-python (please refer to this for the specific license).
 
 -----------------------------------------------------------------------
-**First Release**
+## First Release
 
 This release deals with the simplification of conjoint clauses, relative clauses, appositive phrases and passive voice for the English language.
 We also support the simplification of appositive phrases and passive voice for Galician.
@@ -14,27 +14,27 @@ Simplifications are made according to the parser tree output, given priority to 
 Sentences are simplified recursively until there is nothing more to be simplified.
 
 -----------------------------------------------------------------------
-**External Resources/Tool**
+## External Resources/Tool
 
-## English
+**English**
 Apart from the CoreNLP server code, we also use two external libraries:
 
-NodeBox (https://www.nodebox.net/code/index.php/Linguistics#verb_conjugation)
-Truecaser (https://github.com/nreimers/truecaser)
+1. NodeBox (https://www.nodebox.net/code/index.php/Linguistics#verb_conjugation)
+2. Truecaser (https://github.com/nreimers/truecaser)
 
 Such libraries are embedded in this code, but please refer to their licenses before using them. 
 
 For the truecaser a model file .obj is required. Please download the English pre-trained model from https://github.com/nreimers/truecaser/releases and unzip the file on the truecaser folder. You can also train your own truecaser model following the instructions provided in https://github.com/nreimers/truecaser.
 
-## Galician
+**Galician**
 You need to download the pre-trained truecase model, dependency parser and POS tagger for Galician:
 
-Truecase model (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/distributions.gl.obj) - please place this model into the truecase folder
-POS tagger (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.tagger)
-Dependency parser (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.nndep.model.txt.gz)
+1. Truecase model (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/distributions.gl.obj) - please place this model into the truecase folder
+2. POS tagger (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.tagger)
+3. Dependency parser (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/galician.nndep.model.txt.gz)
 
 -----------------------------------------------------------------------
-**How to run**
+## How to run
 
 `usage: __main__.py [-h] [-l {en,gl}] [-d D]
 
@@ -54,5 +54,7 @@ For Galician, you will also need to place the right path to the POS tagger and D
 -----------------------------------------------------------------------
 
 **References**
+
 Siddharthan, A. (2004): Syntactic Simplification and Text Cohesion. PhD Thesis, November 2003 OR Technical Report TR-597, University of Cambridge, August 2004. 
+
 Siddharthan, A. and  Mandya, A. (2014): Hybrid text simplification using synchronous dependency grammars with hand-written and automatically harvested rules. Proceedings of the 14th Conference of the European Chapter of the Association for Computational Linguistics (EACL 2014), Gothenburg, Sweden. 
