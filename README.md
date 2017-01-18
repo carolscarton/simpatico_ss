@@ -16,7 +16,7 @@ Sentences are simplified recursively until there is nothing more to be simplifie
 -----------------------------------------------------------------------
 **External Resources/Tool**
 
-*English*
+## English
 Apart from the CoreNLP server code, we also use two external libraries:
 
 NodeBox (https://www.nodebox.net/code/index.php/Linguistics#verb_conjugation)
@@ -26,7 +26,7 @@ Such libraries are embedded in this code, but please refer to their licenses bef
 
 For the truecaser a model file .obj is required. Please download the English pre-trained model from https://github.com/nreimers/truecaser/releases and unzip the file on the truecaser folder. You can also train your own truecaser model following the instructions provided in https://github.com/nreimers/truecaser.
 
-*Galician*
+## Galician
 You need to download the pre-trained truecase model, dependency parser and POS tagger for Galician:
 
 Truecase model (staffwww.dcs.shef.ac.uk/people/C.Scarton/resources/distributions.gl.obj) - please place this model into the truecase folder
