@@ -5,7 +5,7 @@ import time
 class Parser():
     def __init__(self):
         #corenlp_dir = "/export/data/ghpaetzold/simpatico/server_simplifiers/core_nlp/stanford-corenlp-full-2016-10-31/"
-        corenlp_dir = "/export/data/cscarton/simpatico/stanford-corenlp-full-2015-12-09/"
+        corenlp_dir = "/export/data/cscarton/simpatico/stanford-corenlp-full-2016-10-31/"
         self.corenlp = StanfordCoreNLP(corenlp_dir, memory="4g", properties='myproperties.properties')
     
     def process(self, sentence):

@@ -427,6 +427,9 @@ class Simplify():
                     
                 if 'nmod:agent' in deps_root.keys():
 
+                    if 'nsubjpass' not in deps_root:
+                        return ant, False
+
                     subj = deps_root['nsubjpass'][0]
                     if subj in aux:
                         deps_subj = aux[subj]
