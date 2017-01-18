@@ -44,6 +44,13 @@ The systems also expect a file called 'distributions.obj' in the truecaser folde
 For Galician, you will also need to place the right path to the POS tagger and Dependency Parser in the 'galician.myproperties.properties'.
 
 -----------------------------------------------------------------------
+## Notes about Galician
+
+The dependency parser and POS tagger were trained using the training environment provided by Stanford (dependency parser: http://nlp.stanford.edu/software/nndep.shtml - POS tagger: http://www-nlp.stanford.edu/software/pos-tagger-faq.shtml#train).
+
+The verb conjugation available in the 'gl/' folder is based on the verb conjugation model of NodeBox and uses the lexical resources made available by the Linguakit project (https://github.com/citiususc/Linguakit).
+
+-----------------------------------------------------------------------
 
 **References**
 
